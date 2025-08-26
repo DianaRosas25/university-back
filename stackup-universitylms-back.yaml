@@ -1,0 +1,4610 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "CloudFormation para la generación de APIs LMS
+- Implementación de Lambda
+- API Gateway"
+
+Parameters:
+#Condición para considerar la creación de unos servicios - Subir archivos a S3 para crear el layer
+  DeployFrist:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+#Condición para considerar la creación de unos servicios - Creación de lambdas 
+  DeploySecond:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+#Condición para considerar la creación de unos servicios - Creación de lambdas - Eventos 
+  DeployThird:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+#Condición para considerar la creación de unos servicios - Creación de lambdas - Eventos 
+  DeployFourth:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+  DeployFiveth:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+# Datos para la generación del Layer
+  RepositoryName:
+    Type: String
+    Description: Nombre del repositorio en CodeCommit que contiene el código del layer.
+
+  BranchName:
+    Type: String
+    Default: main
+    Description: Rama del repositorio CodeCommit a construir.
+
+  BucketName:
+    Type: String
+    Description: Nombre del bucket.  
+
+# Datos de la Base de datos
+  EndpointRDS:
+    Type: String
+    Description: "Endpoint de la base de datos."
+  
+  DBName:
+    Type: String
+    Description: "Nombre de la base de datos."
+
+  DBUser:
+    Type: String
+    Description: "Nombre del usuario de la base de datos."
+
+  DBPass:
+    Type: String
+    Description: "Contraseña de base de datos para moodle."
+    NoEcho: true
+
+  URLMoodle:
+    Type: String
+    Description: "URL de moodle de API que se expone"
+
+  URLPanel:
+    Type: String
+    Description: "URL del panel - Login"
+  
+  CossEventBus:
+    Type: String
+    Description: "ID de la consola de CossAccount - EventBus"
+    
+# Datos para los roles - vinculado al contenido de cada API
+  RoleNameProvisioning:
+    Type: String
+    Description: "Nombre del rol para la función de aprovisionamiento"
+  
+  RoleNameProfile:
+    Type: String
+    Description: "Nombre del rol para la función de perfiles"
+
+  RoleNameVerifyUser:
+    Type: String
+    Description: "Nombre del rol para la función de verifyUser"
+
+  RoleNameUserModule:
+    Type: String
+    Description: "Nombre del rol para la función de modulo de usuarios"
+
+  RoleNameCursosOverview:
+    Type: String
+    Description: "Nombre del rol para la función de Cursos Overview"
+
+  RoleNameCatalog:
+    Type: String
+    Description: "Nombre del rol para la función de catalogo"
+  
+  RoleNameCatalogPosition:
+    Type: String
+    Description: "Nombre del rol para la función de catalogo puesto"
+
+  RoleNameCategories:
+    Type: String
+    Description: "Nombre del rol para la función de categorias"
+
+  RoleNameCreateUpdateCourse:
+    Type: String
+    Description: "Nombre del rol para la función de modulo de creación y actualización de curso"
+
+  RoleNameCreateUser:
+    Type: String
+    Description: "Nombre del rol para la función de crear un usuario"
+
+  RoleNameBuyCourses:
+    Type: String
+    Description: "Nombre del rol para la función de compra de cursos"
+  
+  RoleNameFreeCourses:
+    Type: String
+    Description: "Nombre del rol para la función de cursos gratuitos"
+
+  RoleNameUserCourses:
+    Type: String
+    Description: "Nombre del rol para la función de usuario cursos"
+
+  RoleNameGetKPIs:
+    Type: String
+    Description: "Nombre del rol para la función de obtención de KPIs"
+
+  RoleNameUserOnboarding:
+    Type: String
+    Description: "Nombre del rol para la función un usuario onboarding"
+
+  RoleNameStringAdd:
+    Type: String
+    Description: "Nombre del rol para la función de agregar cadena"
+
+  RoleNameStringCohortes:
+    Type: String
+    Description: "Nombre del rol para la función de cadena cohortes"
+
+  RoleNameCreateUserEvent:
+    Type: String
+    Description: "Nombre del rol para evento crea usuario"
+
+  RoleNameDeleteUserEvent:
+    Type: String
+    Description: "Nombre del rol para evento eliminación de usuario"
+
+  RoleNameUpdateUserEvent:
+    Type: String
+    Description: "Nombre del rol para evento de actualización usuario"
+
+  RoleNameUpdateUserRoleEvent:
+    Type: String
+    Description: "Nombre del rol para evento de actualización usuario rol"
+
+  RoleNameManageLicenses:
+    Type: String
+    Description: "Nombre del rol para la función manejo de licencias"
+
+  RoleNameStoreLicenses:
+    Type: String
+    Description: "Nombre del rol para la función almacenamiento de licencias"
+  
+  RoleNameProvisioningUser:
+    Type: String
+    Description: "Nombre del rol para la función aprovisionamiento de usuarios"
+
+  RoleNameGetCurso:
+    Type: String
+    Description: "Nombre del rol para la función para obtener los curso"
+
+
+#Datos para subnets de la Base de datos
+  SubnetBD1:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private subnet in the first Availability Zone."
+
+  SubnetBD2:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Private subnet in the second Availability Zone."
+  
+  SecurityGroupLMS:
+    Type: String
+    Description: "Grupo de seguridad de moodle"
+
+  BucketS3Media:
+    Type: String
+    Description: "Nombre del bucket de S3 para media"
+
+# Condición de Deploy - Pipelines
+  PipelineArchivosS3:
+    Type: String
+    Description: "Ejecución del pipeline en caso de actualizar TRUE si no se quiere actualizar FALSE"
+    AllowedValues:
+      - true
+      - false
+
+# Etiquetas
+  TagProject:
+    Type: String
+    Default: DefaultProject
+    Description: Nombre de la etiqueta para recursos AWS
+
+  TagEnvironment:
+    Type: String
+    Default: DefaultEnvironment
+    Description: Nombre del AMBIENTE a desplegar (dev, qa, prod)
+  
+  TagOwneriNBest:
+    Type: String
+    Default: Arturo Vargas
+    Description: Nombre de la etiqueta del PROPIETARIO
+
+  TagClient:
+    Type: String
+    Default: City Express
+    Description: Nombre del cliente
+  
+  TagContact:
+    Type: String
+    Default: Juan Carlos Matias
+    Description: Nombre del contacto
+  
+  TagProjectCity:
+    Type: String
+    Default: Stack Up University
+    Description: Nombre asignado por City
+
+
+Conditions:
+  FristDeploy: !Equals [ !Ref DeployFrist, "false" ]
+  SecondDeploy: !Equals [ !Ref DeploySecond, "false" ]
+  ThirdDeploy: !Equals [ !Ref DeployThird, "false" ]
+  FourthDeploy: !Equals [ !Ref DeployFourth, "false" ]
+  FivethDeploy: !Equals [ !Ref DeployFiveth, "false" ]
+
+Resources:
+# Construcción de Layer para las funciones Lambda
+# S3 Bucket para almacenar los artefactos
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      Tags:
+        - Key: Name
+          Value: !Ref BucketName
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Bucket para el almacenamiento de la media - LMS
+  S3BucketMedia:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${TagProject}-${TagEnvironment}-media"
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred  
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-media-${TagEnvironment}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  ## Permitir acceso público mediante ACLs
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3BucketMedia
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowPublicRead
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${S3BucketMedia}/*"
+
+# Compilación para subir archivos a un S3
+# Role para CodePipeline con permisos completos para acceder a CodeCommit, S3, Lambda, CodeBuild
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${TagProject}-codePipeline-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service: "codepipeline.amazonaws.com"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-codePipeline-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Permisos para CodeCommit 
+              - Effect: "Allow"
+                Action:
+                  - codecommit:CancelUploadArchive
+                  - codecommit:GetBranch
+                  - codecommit:GetCommit
+                  - codecommit:GetRepository
+                  - codecommit:GetUploadArchiveStatus
+                  - codecommit:UploadArchive
+                Resource: 
+                  - !Sub "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${RepositoryName}" 
+
+              # Permisos para S3
+              - Effect: "Allow"
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:PutObject"
+                Resource: 
+                  - !Sub "arn:aws:s3:::${S3Bucket}"
+                  - !Sub "arn:aws:s3:::${S3Bucket}/*"
+
+              # Permisos para Lambda
+              - Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                  - "lambda:ListFunctions"
+                Resource: "*"
+
+              # Permisos para CodeBuild
+              - Effect: "Allow"
+                Action:
+                  - "codebuild:StartBuild"
+                  - "codebuild:BatchGetBuilds"
+                Resource: "*"
+
+              # Permisos para logs
+              - Effect: "Allow"
+                Action:
+                  - iam:PassRole
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+              # Permisos para CodePipeline
+              - Effect: "Allow"
+                Action:
+                  - "codepipeline:PutJobSuccessResult"
+                  - "codepipeline:PutJobFailureResult"
+                  - "codepipeline:PollForJobs"
+                  - "codepipeline:StartPipelineExecution"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-codePipeline-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Role para CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${TagProject}-codeBuild-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service: "codebuild.amazonaws.com"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-codeBuild-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Permisos para interactuar con CloudWatch Logs
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Resource: 
+                  - !Sub "arn:aws:s3:::${S3Bucket}"
+                  - !Sub "arn:aws:s3:::${S3Bucket}/*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-codeBuild-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Proyecto de CodeBuild para copiar los archivos de CodeCommit a S3
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${TagProject}-codeBuild-archivos-S3"
+      Description: "Proyecto para copiar archivos de CodeCommit a S3"
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+        EnvironmentVariables:
+          - Name: S3_NAME
+            Value: !Ref BucketName
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                python: 3.8
+            build:
+              commands:
+                - echo "Copiando archivos .zip de CodeCommit a S3 y preservando la estructura de carpetas..."
+                - mkdir -p output
+                - aws s3 cp . s3://$S3_NAME/ --recursive
+
+  # El pipeline de CodePipeline
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub "${TagProject}-codePipeline-archivos-S3"
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref S3Bucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              OutputArtifacts:
+                - Name: SourceArtifact
+              Configuration:
+                RepositoryName: !Ref RepositoryName
+                BranchName: !Ref BranchName
+                PollForSourceChanges: !Ref PipelineArchivosS3
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              InputArtifacts:
+                - Name: SourceArtifact
+              OutputArtifacts:
+                - Name: BuildArtifact
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              RunOrder: 1
+
+  # Layer de las lambdas - Tomar el archivo del s3
+  LambdaLayer:
+    Type: AWS::Lambda::LayerVersion
+    Condition: FristDeploy
+    Properties:
+      LayerName: !Sub "${TagProject}-layer-requests"
+      Description: !Sub "Layer para las funciones del proyecto ${TagProject}"
+      Content:
+        S3Bucket: !Ref BucketName
+        S3Key: "requests-layer.zip"
+      CompatibleRuntimes:
+        - python3.11 
+      CompatibleArchitectures:
+        - x86_64
+
+  LambdaLayer2:
+    Type: AWS::Lambda::LayerVersion
+    Condition: FristDeploy
+    Properties:
+      LayerName: !Sub "${TagProject}-layer-psycopg2final"
+      Description: !Sub "Layer para las funciones del proyecto ${TagProject}"
+      Content:
+        S3Bucket: !Ref BucketName
+        S3Key: "psycopg2final.zip"
+      CompatibleRuntimes:
+        - python3.11 
+      CompatibleArchitectures:
+        - x86_64
+
+# Aprovisionamiento
+# Rol para lambda de aprovisionamiento
+  RolAprovisionamietoLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameProvisioning}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameProvisioning}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameProvisioning}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProvisioning}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de aprovisionamiento
+  ProvisioningLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameProvisioning}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolAprovisionamietoLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "aprovisionamiento.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+          URL: !Ref URLPanel
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProvisioning}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact  
+
+# API Perfiles
+# Rol para lambda de perfiles
+  RolPerfilesLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameProfile}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameProfile}-lambda-policy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameProfile}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProfile}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la lambda de perfiles
+  ProfilesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameProfile}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolPerfilesLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameProfile}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProfile}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# VerifyUser
+# Rol para lambda de verifyUser
+  RolverifyUserLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameVerifyUser}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameVerifyUser}-lambda-policy"
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameVerifyUser}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameVerifyUser}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+## Función lambda de verifyUser
+  VerifyUserLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Condition: SecondDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameVerifyUser}"
+      Runtime: "python3.11"
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Role: !GetAtt RolverifyUserLambda.Arn
+      Handler: "lambda_function.lambda_handler"
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "verifyUser.zip"
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameVerifyUser}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Modulos usuario
+# Rol para lambda de modulos usuario
+  RolModuloUsuarioLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameUserModule}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameUserModule}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameUserModule}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserModule}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de modulos Usuario
+  UsersModuleLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameUserModule}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolModuloUsuarioLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "modulosUsuario.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserModule}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Cursos overview
+# Rol para lambda de Cursos Overview
+  RolCursosOverviewLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCursosOverview}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCursosOverview}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCursosOverview}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCursosOverview}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Construcción de la Lambda para Cursos Overview 
+  CursosOverviewLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCursosOverview}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCursosOverviewLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "cursosOverview.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCursosOverview}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Catalogo 
+# Rol para lambda de Catalogo
+  RolCatalogLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCatalog}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCatalog}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCatalog}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCatalog}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Catalogo
+  CatalogLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCatalog}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCatalogLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "catalogo.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCatalog}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Catalogo puestos
+# Rol para lambda de Catalogo - Puestos
+  RolCatalogPositionLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCatalogPosition}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCatalogPosition}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCatalogPosition}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCatalogPosition}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Catalogo - Puesto
+  CatalogPositionLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCatalogPosition}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCatalogPositionLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "catalogoPuestos.zip"
+      Runtime: python3.11
+      MemorySize: 128
+      Timeout: 30
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCatalogPosition}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Categorias
+# Rol para lambda de Categorias
+  RolCategoriesLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCategories}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCategories}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCategories}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCategories}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Categorias
+  CategoriesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCategories}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCategoriesLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "categorias.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCategories}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Creación y actualización de cursos 
+# Rol para lambda de Creación y actualización de cursos 
+  RolCreateUpdateCourseLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCreateUpdateCourse}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCreateUpdateCourse}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCreateUpdateCourse}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCreateUpdateCourse}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Creación y actualización de curso
+  CreateUpdateCourseLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCreateUpdateCourse}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCreateUpdateCourseLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "createUpdateCourse.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCreateUpdateCourse}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Crear usuario 
+# Rol para lambda de Crear usuario
+  RolCreateUserLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameCreateUser}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameCreateUser}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameCreateUser}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCreateUser}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Crear usuario
+  CreateUserLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameCreateUser}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolCreateUserLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "createUser.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameCreateUser}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Compra de curso
+# Rol para lambda de Compra de curso
+  RolBuyCoursesLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameBuyCourses}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameBuyCourses}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameBuyCourses}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameBuyCourses}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para Compra curso
+  BuyCoursesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameBuyCourses}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolBuyCoursesLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "cursosCompra.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameBuyCourses}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Curso usuario
+# Rol para lambda de curso usuario
+  RolUserCoursesLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameUserCourses}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameUserCourses}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameUserCourses}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserCourses}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para cursos usuarios
+  UserCoursesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameUserCourses}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolUserCoursesLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "cursosUsuario.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserCourses}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# GetKPIs 
+# Rol para lambda de GetKPIs
+  RolGetKPIsLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameGetKPIs}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameGetKPIs}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameGetKPIs}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                  - "ec2:DeleteNetworkInterface"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "athena:*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "glue:CreateDatabase"
+                  - "glue:DeleteDatabase"
+                  - "glue:GetCatalog"
+                  - "glue:GetCatalogs"
+                  - "glue:GetDatabase"
+                  - "glue:GetDatabases"
+                  - "glue:UpdateDatabase"
+                  - "glue:CreateTable"
+                  - "glue:DeleteTable"
+                  - "glue:BatchDeleteTable"
+                  - "glue:UpdateTable"
+                  - "glue:GetTable"
+                  - "glue:GetTables"
+                  - "glue:BatchCreatePartition"
+                  - "glue:CreatePartition"
+                  - "glue:DeletePartition"
+                  - "glue:BatchDeletePartition"
+                  - "glue:UpdatePartition"
+                  - "glue:GetPartition"
+                  - "glue:GetPartitions"
+                  - "glue:BatchGetPartition"
+                  - "glue:StartColumnStatisticsTaskRun"
+                  - "glue:GetColumnStatisticsTaskRun"
+                  - "glue:GetColumnStatisticsTaskRuns"
+                  - "glue:GetCatalogImportStatus"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:GetBucketLocation"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:ListBucketMultipartUploads"
+                  - "s3:ListMultipartUploadParts"
+                  - "s3:AbortMultipartUpload"
+                  - "s3:CreateBucket"
+                  - "s3:PutObject"
+                  - "s3:PutBucketPublicAccessBlock"
+                Resource:
+                  - "arn:aws:s3:::aws-athena-query-results-*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Resource:
+                  - "arn:aws:s3:::athena-examples*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:ListBucket"
+                  - "s3:GetBucketLocation"
+                  - "s3:ListAllMyBuckets"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "sns:ListTopics"
+                  - "sns:GetTopicAttributes"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "cloudwatch:PutMetricAlarm"
+                  - "cloudwatch:DescribeAlarms"
+                  - "cloudwatch:DeleteAlarms"
+                  - "cloudwatch:GetMetricData"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "lakeformation:GetDataAccess"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "datazone:ListDomains"
+                  - "datazone:ListProjects"
+                  - "datazone:ListAccountEnvironments"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "pricing:GetProducts"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "s3:*"
+                  - "s3-object-lambda:*"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameGetKPIs}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda para GetKPIs
+  GetKPIsLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameGetKPIs}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolGetKPIsLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "getKPIs.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameGetKPIs}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# UserOnboarding
+# Rol para lambda de UserOnboarding
+  RolUserOnboardingLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameUserOnboarding}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameUserOnboarding}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameUserOnboarding}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserOnboarding}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de UserOnboarding
+  UserOnboardingLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameUserOnboarding}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolUserOnboardingLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "userOnboarding.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameUserOnboarding}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Agregar cadena
+# Rol para lambda de agregar cadena
+  RolStringAddLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameStringAdd}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameStringAdd}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameStringAdd}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStringAdd}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Construcción de la Lambda para Agregar Cadena
+  StringAddLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameStringAdd}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolStringAddLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "agregarCadena.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+          DB_PORT: "5432"
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStringAdd}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+ 
+# Cadena cohortes
+# Rol para lambda de cadena cohortes
+  RolStringCohortesLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameStringCohortes}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameStringCohortes}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameStringCohortes}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStringCohortes}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Construcción de la Lambda para Cadena Cohortes
+  StringCohortesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: SecondDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameStringCohortes}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolStringCohortesLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: "cadenasCohortes.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+          DB_PORT: "5432"
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStringCohortes}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+  
+# Obtener licencias-manejo
+# Rol para lambda de licencias-manejo"
+  ManageLicensesRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameManageLicenses}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameManageLicenses}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameManageLicenses}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameManageLicenses}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Construcción de la Lambda para licencias manejo
+  ManageLicensesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: FourthDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameManageLicenses}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt ManageLicensesRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameManageLicenses}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+          DB_PORT: "5432"
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameManageLicenses}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+ 
+# Licencias Almacenamiento
+# Rol para lambda de Licencias Almacenamiento
+  StoreLicensesRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameStoreLicenses}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameStoreLicenses}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameStoreLicenses}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStoreLicenses}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Construcción de la Lambda para Cadena Cohortes
+  StoreLicensesLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: FivethDeploy
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameStoreLicenses}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt StoreLicensesRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameStoreLicenses}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_USER: !Ref DBUser
+          DB_PORT: "5432"
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameStoreLicenses}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Aprovisionamiento usuarios
+# Rol para lambda de aprovisionamiento usuarios
+  RolProvisioningUserLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameProvisioningUser}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameProvisioningUser}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameProvisioningUser}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProvisioningUser}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de aprovisionamiento usuario
+  ProvisioningUserLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: FivethDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameProvisioningUser}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolProvisioningUserLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameProvisioningUser}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+          URL: !Ref URLPanel
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameProvisioningUser}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact 
+
+# Aprovisionamiento getCurso
+# Rol para lambda de getCurso
+  RolGetCursoLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-api-${RoleNameGetCurso}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-api-${RoleNameGetCurso}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-api-${RoleNameGetCurso}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameGetCurso}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de getCurso
+  GetCursoLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: FivethDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-api-${RoleNameGetCurso}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt RolGetCursoLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameGetCurso}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          S3_BUCKET_NAME: !Ref BucketS3Media
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api-${RoleNameGetCurso}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact 
+    
+# ---------------------------------------
+# Despliegue de EventBridge - Usuarios  
+# ---------------------------------------
+  # Despliegue de lambdas 
+  # Despligue de createUser
+  # Rol para lambda de createUser - Event
+  CreateUserEventRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-${RoleNameCreateUserEvent}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-${RoleNameCreateUserEvent}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-${RoleNameCreateUserEvent}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameCreateUserEvent}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de CreateUser Event
+  CreateUserEventLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: ThirdDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-${RoleNameCreateUserEvent}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt CreateUserEventRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameCreateUserEvent}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameCreateUserEvent}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact 
+
+  # Despligue de deleteUser
+  # Rol para lambda de deleteUser - Event
+  DeleteUserEventRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-${RoleNameDeleteUserEvent}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-${RoleNameDeleteUserEvent}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-${RoleNameDeleteUserEvent}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameDeleteUserEvent}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de DeleteUser Event
+  DeleteUserEventLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: ThirdDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-${RoleNameDeleteUserEvent}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt DeleteUserEventRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameDeleteUserEvent}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameDeleteUserEvent}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact 
+
+  # Despligue de updateUser
+  # Rol para lambda de updateUser - Event
+  UpdateUserEventRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-${RoleNameUpdateUserEvent}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-${RoleNameUpdateUserEvent}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-${RoleNameUpdateUserEvent}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameUpdateUserEvent}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de updateUser Event
+  UpdateUserEventLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: ThirdDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-${RoleNameUpdateUserEvent}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt UpdateUserEventRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameUpdateUserEvent}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameUpdateUserEvent}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Despligue de updateUserRole
+  # Rol para lambda de updateUserRole - Event
+  UpdateUserRoleEventRolLambda:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${TagProject}-${RoleNameUpdateUserRoleEvent}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: !Sub "${TagProject}-${RoleNameUpdateUserRoleEvent}-lambda-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: 
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${TagProject}-${RoleNameUpdateUserRoleEvent}:*"
+              - Effect: "Allow"
+                Action:
+                  - "ec2:CreateNetworkInterface"
+                  - "ec2:DeleteNetworkInterface"
+                  - "ec2:DescribeNetworkInterfaces"
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameUpdateUserRoleEvent}-lambda-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+# Construcción de la Lambda de updateUserRole Event
+  UpdateUserRoleEventLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: ThirdDeploy
+    DependsOn: 
+      - CodeBuildProject
+    Properties:
+      FunctionName: !Sub "${TagProject}-${RoleNameUpdateUserRoleEvent}"
+      Handler: "lambda_function.lambda_handler"  
+      Role: !GetAtt UpdateUserRoleEventRolLambda.Arn
+      Code:
+        S3Bucket: !Ref BucketName  
+        S3Key: !Sub "${RoleNameUpdateUserRoleEvent}.zip"
+      Runtime: python3.11
+      Layers:
+        - !Ref LambdaLayer
+        - !Ref LambdaLayer2
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          DB_HOST: !Ref EndpointRDS
+          DB_NAME: !Ref DBName
+          DB_PASS: !Ref DBPass
+          DB_PORT: "5432"
+          DB_USER: !Ref DBUser
+          MOODLE_TOKEN: "ced608b7d304232ec81df5f242e7acc7"
+          MOODLE_URL: !Ref URLMoodle
+      VpcConfig:
+        SubnetIds:
+          - !Ref SubnetBD1  
+          - !Ref SubnetBD2
+        SecurityGroupIds:
+          - !Ref SecurityGroupLMS 
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-${RoleNameUpdateUserRoleEvent}"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Configuración del eventBridge
+  # Rol de Event 
+  EventBridgeInvokeLambdaRole:
+    Type: AWS::IAM::Role
+    Condition: ThirdDeploy
+    Properties:
+      RoleName: !Sub "${TagProject}-eventbuses-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowInvokeLambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameCreateUserEvent}"
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameDeleteUserEvent}"
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameUpdateUserEvent}"
+                  - !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameUpdateUserRoleEvent}"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-eventbuses-role"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+
+  # Creación del event buses
+  CrossAccountEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub "${TagProject}-crossaccount-eventbus"
+      Description: Cross account event bus hecho para recibir los eventos de EventBridge y actualizar usuarios
+      Policy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowEventsFromStackupPanelAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${CossEventBus}:root"
+            Action: "events:PutEvents"
+            Resource: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/${TagProject}-crossaccount-eventbus"
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-crossaccount-eventbus"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  # Event para CreateUser
+  EventBridgeRuleCreateUser:
+    Type: AWS::Events::Rule
+    Condition: ThirdDeploy
+    Properties:
+      Name: eventbridge-rule-create-user
+      Description: Regla que se encarga de ejecutar la lambda para la creación de usuarios
+      EventBusName: !Ref CrossAccountEventBus
+      EventPattern:
+        source:
+          - "com.stackup.panel"
+        detail-type:
+          - "USERCreate"
+      Targets:
+        - Arn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameCreateUserEvent}"
+          Id: TargetCreateUser
+          RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
+      
+
+  # Event para deleteUser
+  EventBridgeRuleDeleteUser:
+    Type: AWS::Events::Rule
+    Condition: ThirdDeploy
+    Properties:
+      Name: eventbridge-rule-delete-user
+      Description: Regla que se encarga de ejecutar la lambda para la eliminación de usuarios
+      EventBusName: !Ref CrossAccountEventBus
+      EventPattern:
+        source:
+          - "com.stackup.panel"
+        detail-type:
+          - "USERDelete"
+      Targets:
+        - Arn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameDeleteUserEvent}"
+          Id: TargetCreateUser
+          RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
+  
+  # Event para updateUser
+  EventBridgeRuleUpdateUser:
+    Type: AWS::Events::Rule
+    Condition: ThirdDeploy
+    Properties:
+      Name: eventbridge-rule-update-user
+      Description: Regla que se encarga de ejecutar la lambda para la actualización de usuarios
+      EventBusName: !Ref CrossAccountEventBus
+      EventPattern:
+        source:
+          - "com.stackup.panel"
+        detail-type:
+          - "USERUpdate"
+      Targets:
+        - Arn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameUpdateUserEvent}"
+          Id: TargetCreateUser
+          RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
+  
+   # Event para updateUser
+  EventBridgeRuleUpdateUserRole:
+    Type: AWS::Events::Rule
+    Condition: ThirdDeploy
+    Properties:
+      Name: eventbridge-rule-update-user-role
+      Description: Regla que se encarga de ejecutar la lambda para la actualización de usuarios rol
+      EventBusName: !Ref CrossAccountEventBus
+      EventPattern:
+        source:
+          - "com.stackup.panel"
+        detail-type:
+          - "USER-ROLEUpdate"
+      Targets:
+        - Arn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${TagProject}-${RoleNameUpdateUserRoleEvent}"
+          Id: TargetCreateUser
+          RoleArn: !GetAtt EventBridgeInvokeLambdaRole.Arn
+  
+  # Event de log
+  EventBridgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: ThirdDeploy
+    Properties:
+      LogGroupName: /aws/events/eventbridge/log-dump
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: EventBridgeLogDump
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  EventBridgeLogGroupPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Condition: ThirdDeploy
+    Properties:
+      PolicyName: eventbridge-log-permissions
+      PolicyDocument: 
+        !Sub |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "events.amazonaws.com"
+                },
+                "Action": "logs:PutLogEvents",
+                "Resource": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/events/eventbridge/log-dump:*"
+              }
+            ]
+          }
+
+# ---------------------------------------
+# Despliegue de API
+# ---------------------------------------
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Condition: FristDeploy
+    Properties:
+      Name: !Sub "${TagProject}-api"
+      Description: !Sub "API Gateway para ${TagProject} en el ambiente de ${TagEnvironment}"
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Name
+          Value: !Sub "${TagProject}-api"
+        - Key: Project
+          Value: !Ref TagProjectCity
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Owner_iNBest
+          Value: !Ref TagOwneriNBest
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Contact
+          Value: !Ref TagContact
+
+  ApiGatewayRoot:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: "lms"
+      RestApiId: !Ref ApiGateway
+
+  ApiGatewaySub:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewayRoot  
+      PathPart: "origen"
+      RestApiId: !Ref ApiGateway
+
+  ProfilesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "profiles"
+      RestApiId: !Ref ApiGateway
+
+  ProvisioningResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "provisioning"
+      RestApiId: !Ref ApiGateway
+  
+  VerifyUserResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "verifyUser"
+      RestApiId: !Ref ApiGateway
+
+  UserModuleResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "modulosUsuario"
+      RestApiId: !Ref ApiGateway
+
+  CursosOverviewResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "cursosOverview"
+      RestApiId: !Ref ApiGateway
+
+  CatalogResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "catalogo"
+      RestApiId: !Ref ApiGateway
+
+  CatalogPositionResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "catalogoPuestos"
+      RestApiId: !Ref ApiGateway
+
+  CategoriesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "categorias"
+      RestApiId: !Ref ApiGateway
+  
+  CreateUpdateCourseResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "createUpdateCourse"
+      RestApiId: !Ref ApiGateway
+
+  CreateUserResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "createUser"
+      RestApiId: !Ref ApiGateway
+  
+  BuyCoursesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "cursosCompra"
+      RestApiId: !Ref ApiGateway
+
+  FreeCoursesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "cursosGratuitos"
+      RestApiId: !Ref ApiGateway
+  
+  UserCoursesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "cursosUsuario"
+      RestApiId: !Ref ApiGateway
+  
+  GetKPIsResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "getKPIs"
+      RestApiId: !Ref ApiGateway
+  
+  UserOnboardingResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "userOnboarding"
+      RestApiId: !Ref ApiGateway
+  
+  StringAddResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "agregarCadena"
+      RestApiId: !Ref ApiGateway
+  
+  StringCohortesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: "cadenasCohortes"
+      RestApiId: !Ref ApiGateway
+  
+  ManageLicensesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: !Ref RoleNameManageLicenses
+      RestApiId: !Ref ApiGateway
+  
+  StoreLicensesResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: !Ref RoleNameStoreLicenses
+      RestApiId: !Ref ApiGateway
+  
+  ProvisioningUserResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: !Ref RoleNameProvisioningUser
+      RestApiId: !Ref ApiGateway
+  
+  GetCursoResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: FristDeploy
+    Properties:
+      ParentId: !Ref ApiGatewaySub
+      PathPart: !Ref RoleNameGetCurso
+      RestApiId: !Ref ApiGateway
+
+# API para perfiles
+  ProfilesGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref ProfilesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProfilesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        # RequestTemplates:
+        #   application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ProfilesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ProfilesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionProfiles:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProfilesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/profiles"
+
+# API para Aprovisionamiento      
+  ProvisioningOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref ProvisioningResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  ProvisioningPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref ProvisioningResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProvisioningLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionProvisioning:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProvisioningLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/provisioning"
+
+#API para verifyUser - APP
+  VerifyUserOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref VerifyUserResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  VerifyUserPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref VerifyUserResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${VerifyUserLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+  
+  ApiGatewayInvokePermissionVerifyUser:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref VerifyUserLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/verifyUser"
+
+# API para modulosUsuario
+  UserModuleOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserModuleResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  UserModulePOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserModuleResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersModuleLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionUserModule:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UsersModuleLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/modulosUsuario"
+ 
+# API para cursosOverview
+  CursosOverviewGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CursosOverviewResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CursosOverviewLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  CursosOverviewOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CursosOverviewResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  ApiGatewayInvokePermissionCursosOverview:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CursosOverviewLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/cursosOverview"
+
+# API para catalogo
+  CatalogGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CatalogResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CatalogLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  CatalogOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CatalogResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionCatalog:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CatalogLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/catalogo"
+
+# API para Catalogo - Puesto
+  CatalogPositionGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CatalogPositionResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CatalogPositionLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  CatalogPositionOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CatalogPositionResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionCatalogPosition:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CatalogPositionLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/catalogoPuestos"
+
+# API para Categoria
+  CategoriesGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CategoriesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CategoriesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+
+  CategoriesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CategoriesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionCategories:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CategoriesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/categorias"
+
+# API para Creación y actualización de curso
+  CreateUpdateCourseGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CreateUpdateCourseResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUpdateCourseLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  CreateUpdateCourseOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CreateUpdateCourseResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  CreateUpdateCoursePATCH:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CreateUpdateCourseResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: PATCH
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUpdateCourseLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+    
+  CreateUpdateCoursePOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CreateUpdateCourseResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUpdateCourseLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+  
+  ApiGatewayInvokePermissionCreateUpdateCourse:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CreateUpdateCourseLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/createUpdateCourse"
+
+# API para Crear usuario
+  CreateUserOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref CreateUserResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  CreateUserPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref CreateUserResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionCreateUser:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CreateUserLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/createUser"
+
+# API para cursosCompra
+  BuyCoursesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref BuyCoursesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  BuyCoursesPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref BuyCoursesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BuyCoursesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionBuyCourses:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref BuyCoursesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/cursosCompra" 
+
+# API para cursosGratuitos
+  FreeCoursesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref FreeCoursesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  # ApiGatewayInvokePermissionFreeCourses:
+  #   Type: AWS::Lambda::Permission
+  #   Condition: SecondDeploy
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !Ref BuyCoursesLambdaFunction
+  #     Principal: apigateway.amazonaws.com
+  #     SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/cursosGratuitos"
+
+# API para cursosUsuario      
+  UserCoursesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserCoursesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  UserCoursesPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserCoursesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserCoursesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionUserCourses:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UserCoursesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/cursosUsuario"
+
+# API para GetKPIs      
+  GetKPIsOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref GetKPIsResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  GetKPIsPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref GetKPIsResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetKPIsLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionGetKPIs:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GetKPIsLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/getKPIs"
+
+# API para userOnboarding      
+  UserOnboardingOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserOnboardingResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  UserOnboardingPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref UserOnboardingResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserOnboardingLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionUserOnboarding:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UserOnboardingLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/userOnboarding"
+
+# API para Agregar cadena      
+  StringAddOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref StringAddResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  StringAddPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref StringAddResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StringAddLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionStringAdd:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StringAddLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/agregarCadena"
+
+# API para Cadenas cohortes
+  StringCohortesGET:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      ResourceId: !Ref StringCohortesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StringCohortesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+
+  StringCohortesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: SecondDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref StringCohortesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionStringCohortes:
+    Type: AWS::Lambda::Permission
+    Condition: SecondDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StringCohortesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/cadenasCohortes"
+
+  # API para ManageLicenses
+  ManageLicensesGET:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref ManageLicensesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ManageLicensesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ManageLicensesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ManageLicensesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+  
+  ApiGatewayInvokePermissionManageLicenses:
+    Type: AWS::Lambda::Permission
+    Condition: FivethDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ManageLicensesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/${RoleNameManageLicenses}"
+
+# API para Storage Licenses      
+  StoreLicensesOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref StoreLicensesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  StoreLicensesPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref StoreLicensesResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StoreLicensesLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionStoreLicenses:
+    Type: AWS::Lambda::Permission
+    Condition: FivethDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StoreLicensesLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/${RoleNameStoreLicenses}"
+
+# API para Aprovisionamiento usuario 
+  ProvisioningUserOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref ProvisioningUserResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  ProvisioningUserPOST:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref ProvisioningUserResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY 
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProvisioningUserLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  ApiGatewayInvokePermissionProvisioningUser:
+    Type: AWS::Lambda::Permission
+    Condition: FivethDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ProvisioningUserLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/lms/origen/${RoleNameProvisioningUser}"
+
+# API para Get Curso
+  GetCursoGET:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      ResourceId: !Ref GetCursoResource
+      RestApiId: !Ref ApiGateway
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: GET
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetCursoLambdaFunction.Arn}/invocations"
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: "{ \"statusCode\": 200 }"
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseTemplates:
+              application/json: ""
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseModels:
+            application/json: Empty
+
+  GetCursoOPTIONS:
+    Type: AWS::ApiGateway::Method
+    Condition: FivethDeploy
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GetCursoResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        RequestTemplates:
+          application/json: "{statusCode:200}"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
+
+  ApiGatewayInvokePermissionGetCurso:
+    Type: AWS::Lambda::Permission
+    Condition: FivethDeploy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GetCursoLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/lms/origen/${RoleNameGetCurso}"
+
+# Declaración de la integración de las APIs
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Condition: SecondDeploy
+    DependsOn:
+      - ProfilesGET
+      - ProfilesOPTIONS
+      - ProvisioningOPTIONS
+      - ProvisioningPOST
+      - VerifyUserOPTIONS
+      - VerifyUserPOST
+      - UserModuleOPTIONS
+      - UserModulePOST
+      - CursosOverviewGET
+      - CursosOverviewOPTIONS
+      - CatalogGET
+      - CatalogOPTIONS
+      - CatalogPositionGET
+      - CatalogPositionOPTIONS
+      - CategoriesGET
+      - CategoriesOPTIONS
+      - CreateUpdateCourseGET
+      - CreateUpdateCourseOPTIONS
+      - CreateUpdateCoursePATCH
+      - CreateUpdateCoursePOST
+      - CreateUserOPTIONS
+      - CreateUserPOST
+      - BuyCoursesOPTIONS
+      - BuyCoursesPOST
+      - FreeCoursesOPTIONS
+      - UserCoursesOPTIONS
+      - UserCoursesPOST
+      - GetKPIsOPTIONS
+      - GetKPIsPOST
+      - UserOnboardingOPTIONS
+      - UserOnboardingPOST
+      - StringAddOPTIONS
+      - StringAddPOST
+      - StringCohortesOPTIONS
+      - StringCohortesGET
+      - ManageLicensesGET
+      - ManageLicensesOPTIONS
+      - StoreLicensesOPTIONS
+      - StoreLicensesPOST
+      - ProvisioningUserOPTIONS
+      - ProvisioningUserPOST
+
+    Properties:
+      StageName: !Ref TagEnvironment
+      Description: !Sub "Deployment for ${TagEnvironment} stage"
+      RestApiId: !Ref ApiGateway
+
+Outputs:
+  BucketNameOutput:
+    Description: Nombre del bucket S3 donde se subio el contenido.
+    Value: !Ref BucketName
+  
+  ProvisioningLambdaFunctionName:
+    Condition: SecondDeploy
+    Description: "Nombre de la funcion lambda de aprovisionamiento"
+    Value: !Ref ProvisioningLambdaFunction
+
+  ProfilesLambdaFunctionName:
+    Condition: SecondDeploy
+    Description: "Nombre de la funcion lambda de perfiles"
+    Value: !Ref ProfilesLambdaFunction
+
+  ApiGatewayName:
+    Condition: FristDeploy
+    Description: "Nombre de la API"
+    Value: !Ref ApiGateway
+  
+  StageName:
+    Condition: SecondDeploy
+    Description: "Nombre del stage de la API Gateway"
+    Value: !Ref TagEnvironment
+
+  ApiGatewayUrl:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}"
+
+  ApiGatewayUrlProfile:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway Profile"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameProfile}"
+ 
+  ApiGatewayUrlProvisioning:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway provisioning"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameProvisioning}"
+
+  ApiGatewayUrlverifyUser:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway verifyUser"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameVerifyUser}"
+
+  ApiGatewayUrlmodulosUsuario:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway modulosUsuario"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameUserModule}"
+
+  ApiGatewayUrlcursosOverview:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway cursosOverview"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCursosOverview}"
+  
+  ApiGatewayUrlCatalog:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway catalogo"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCatalog}"
+ 
+  ApiGatewayUrlCatalogPosition:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway catalogoPuestos"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCatalogPosition}"
+
+  ApiGatewayUrlCategories:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway categorias"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCategories}"
+
+  ApiGatewayUrlCreateUpdateCourse:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway createUpdateCourse"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCreateUpdateCourse}"
+
+  ApiGatewayUrlRoleNameCreateUser:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway createUser"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameCreateUser}"
+
+  ApiGatewayUrlBuyCourses:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway compra de curso"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameBuyCourses}"
+ 
+  ApiGatewayUrlFreeCourses:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway cursos gatuitos"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameFreeCourses}"
+
+  ApiGatewayUrlUserCourses:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway cursos usuario"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameUserCourses}"
+
+  ApiGatewayUrlGetKPIs:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway obtener KPIs"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameGetKPIs}"
+
+  ApiGatewayUrlUserOnboarding:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway usuario Onboarding"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameUserOnboarding}"
+
+  ApiGatewayUrlStringAdd:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway agregar cadena"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameStringAdd}"
+
+  ApiGatewayUrlStringCohortes:
+    Condition: SecondDeploy
+    Description: "The URL of the API Gateway cadena cohortes"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameStringCohortes}"
+
+  ApiGatewayUrlManageLicenses:
+    Condition: FivethDeploy
+    Description: "The URL of the API Gateway manejo de licencias"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameManageLicenses}"
+
+  ApiGatewayUrlStoreLicenses:
+    Condition: FivethDeploy
+    Description: "The URL of the API Gateway almacenamiento de licencias"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameStoreLicenses}"
+  
+  ApiGatewayUrlProvisioningUser:
+    Condition: FivethDeploy
+    Description: "The URL of the API Gateway manejo de licencias"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameProvisioningUser}"
+
+  ApiGatewayUrlGetCurso:
+    Condition: FivethDeploy
+    Description: "The URL of the API Gateway almacenamiento de licencias"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${TagEnvironment}/lms/origen/${RoleNameGetCurso}"
+  
+  BucketName:
+    Description: "Nombre del bucket S3 media de University"
+    Value: !Ref S3BucketMedia
+
+  EventBusArn:
+    Description: ARN of the created Event Bus
+    Value: !GetAtt CrossAccountEventBus.Arn
