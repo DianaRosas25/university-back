@@ -1687,6 +1687,7 @@ Resources:
         S3Key: "getKPIs.zip"
       Runtime: python3.11
       Layers:
+        - !Ref LambdaLayer
         - !Ref LambdaLayer2
       MemorySize: 128
       Timeout: 30
@@ -1696,6 +1697,7 @@ Resources:
           DB_NAME: !Ref DBName
           DB_PASS: !Ref DBPass
           DB_USER: !Ref DBUser
+          URL: !Ref URLPanel
       VpcConfig:
         SubnetIds:
           - !Ref SubnetBD1  
